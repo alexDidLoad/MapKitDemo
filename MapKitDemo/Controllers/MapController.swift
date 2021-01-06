@@ -45,13 +45,13 @@ class MapController: UIViewController {
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        centerMapOnUserLocation()
+        centerMapOnUserLocation(shouldLoadAnnotations: true)
     }
     
     //MARK: - Selectors
     
-    @objc func handleCenterLocation(_ sender: UIButton) {
-        centerMapOnUserLocation()
+    @objc func handleCenterLocation() {
+        centerMapOnUserLocation(shouldLoadAnnotations: false)
     }
     
     //MARK: - Helper Functions
@@ -64,6 +64,9 @@ class MapController: UIViewController {
         centerLocationButton.anchor(top: view.topAnchor, trailing: view.trailingAnchor, paddingTop: 88, paddingTrailing: 16, height: 50, width: 50)
         
         searchInputView = SearchInputView()
+        searchInputView.delegate = self
+        searchInputView.mapController = self
+        
         view.addSubview(searchInputView)
         searchInputView.anchor(leading: view.leadingAnchor,
                                bottom: view.bottomAnchor,
@@ -86,11 +89,59 @@ class MapController: UIViewController {
 
 extension MapController {
     
-    func centerMapOnUserLocation() {
+    func searchBy(naturalLanguageQuery: String, region: MKCoordinateRegion, coordinates: CLLocationCoordinate2D, completion: @escaping (_ response: MKLocalSearch.Response?, _ error: NSError?) -> ()) {
+        
+        //creating local search request
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = naturalLanguageQuery
+        request.region = region
+        
+        let search = MKLocalSearch(request: request)
+        search.start { (response, error) in
+            guard let response = response else {
+                completion(nil, error! as NSError)
+                return
+            }
+            completion(response, nil)
+        }
+    }
+    
+    func centerMapOnUserLocation(shouldLoadAnnotations: Bool) {
         //need coordinates and region
         guard let coordinates = locationManager.location?.coordinate else { return }
         let coordinateRegion = MKCoordinateRegion(center: coordinates, latitudinalMeters: 2000, longitudinalMeters: 2000)
         mapView.setRegion(coordinateRegion, animated: true)
+        
+        if shouldLoadAnnotations {
+            loadAnnotations(withSearchQuery: "restaurants")
+        }
+        searchInputView.expansionState = .NotExpanded
+    }
+    
+    func removeAnnotations() {
+        mapView.annotations.forEach { annotation in
+            if let annotation = annotation as? MKPointAnnotation {
+                mapView.removeAnnotation(annotation)
+            }
+        }
+    }
+    
+    func loadAnnotations(withSearchQuery query: String) {
+        guard let coordinate = locationManager.location?.coordinate else { return }
+        let region = MKCoordinateRegion(center: coordinate, latitudinalMeters: 2000, longitudinalMeters: 2000)
+       
+        searchBy(naturalLanguageQuery: query, region: region, coordinates: coordinate) { (response, error) in
+            
+            guard let response = response else { return }
+            
+            response.mapItems.forEach({ mapItem in
+                let annotation = MKPointAnnotation()
+                annotation.title = mapItem.name
+                annotation.coordinate = mapItem.placemark.coordinate
+                self.mapView.addAnnotation(annotation)
+            })
+            self.searchInputView.searchResults = response.mapItems
+        }
     }
     
 }
@@ -125,5 +176,28 @@ extension MapController: CLLocationManagerDelegate {
             print("unknown case")
         }
     }
+}
+
+//MARK: - SearchInputViewDelegate
+
+extension MapController: SearchInputViewDelegate {
+    
+    func handleSearch(withSearchText searchText: String) {
+        removeAnnotations()
+        loadAnnotations(withSearchQuery: searchText)
+    }
+    
+}
+
+//MARK: - SearchCellDelegate
+
+extension MapController: SearchCellDelegate {
+    
+    func distanceFromUser(location: CLLocation) -> CLLocationDistance? {
+        //grabbing user location
+        guard let userLocation = locationManager.location else { return nil}
+        return userLocation.distance(from: location)
+    }
+    
 }
 

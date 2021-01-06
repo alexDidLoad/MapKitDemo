@@ -6,8 +6,13 @@
 //
 
 import UIKit
+import MapKit
 
 private let reuseIdentifier = "SearchCell"
+
+protocol SearchInputViewDelegate {
+    func handleSearch(withSearchText searchText: String)
+}
 
 class SearchInputView: UIView {
     
@@ -33,7 +38,14 @@ class SearchInputView: UIView {
         case ExpandToSearch
     }
     
-    private var expansionState: ExpansionState!
+    var mapController: MapController?
+    var expansionState: ExpansionState!
+    var delegate: SearchInputViewDelegate?
+    var searchResults: [MKMapItem]? {
+        didSet {
+            tableView.reloadData()
+        }
+    }
     
     //MARK: - Lifecycle
     
@@ -78,11 +90,22 @@ class SearchInputView: UIView {
                     self.expansionState = .NotExpanded
                 }
             }
+            searchBar.showsCancelButton = false
+            searchBar.endEditing(true)
         }
         
     }
     
     //MARK: - Helpers
+    
+    private func dismissOnSearch() {
+        searchBar.showsCancelButton = false
+        searchBar.endEditing(true)
+        
+        animateInputView(targetPosition: self.frame.origin.y + 460) { (_) in
+            self.expansionState = .PartiallyExpanded
+        }
+    }
     
     private func configureUI() {
         backgroundColor = .white
@@ -142,19 +165,40 @@ class SearchInputView: UIView {
 
 extension SearchInputView: UITableViewDelegate, UITableViewDataSource {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return 10
+        
+        guard let searchResults = searchResults else { return 0 }
+        return searchResults.count
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: reuseIdentifier, for: indexPath) as! SearchCell
         
+        if let controller = mapController {
+            cell.delegate = controller
+        }
+        if let searchResults = searchResults {
+            cell.mapItem = searchResults[indexPath.row]
+        }
         return cell
+    }
+    
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        
+        
+        
     }
 }
 
 //MARK: - UISearchBarDelegate
 
 extension SearchInputView: UISearchBarDelegate {
+    
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        guard let searchText = searchBar.text else { return }
+        delegate?.handleSearch(withSearchText: searchText)
+        dismissOnSearch()
+    }
     
     func searchBarTextDidBeginEditing(_ searchBar: UISearchBar) {
         searchBar.showsCancelButton = true
@@ -173,20 +217,7 @@ extension SearchInputView: UISearchBarDelegate {
     }
     
     func searchBarCancelButtonClicked(_ searchBar: UISearchBar) {
-        searchBar.showsCancelButton = false
-        searchBar.endEditing(true)
-        
-        if expansionState == .FullyExpanded {
-            animateInputView(targetPosition: self.frame.origin.y + 460) { (_) in
-                self.expansionState = .PartiallyExpanded
-            }
-        }
-        
-        if expansionState == .PartiallyExpanded {
-            animateInputView(targetPosition: self.frame.origin.y + 250) { (_) in
-                self.expansionState = .NotExpanded
-            }
-        }
+        dismissOnSearch()
     }
-    
 }
+
