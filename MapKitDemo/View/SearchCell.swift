@@ -10,6 +10,7 @@ import MapKit
 
 protocol SearchCellDelegate {
     func distanceFromUser(location: CLLocation) -> CLLocationDistance?
+    func getDirections(forMapItem: MKMapItem)
 }
 
 class SearchCell: UITableViewCell {
@@ -47,6 +48,17 @@ class SearchCell: UITableViewCell {
         return label
     }()
     
+    private lazy var goButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setImage(UIImage(systemName: "car.fill"), for: .normal)
+        button.tintColor = .white
+        button.backgroundColor = #colorLiteral(red: 0.5843137503, green: 0.8235294223, blue: 0.4196078479, alpha: 1)
+        button.layer.cornerRadius = 5
+        button.alpha = 0
+        button.addTarget(self, action: #selector(handleGo), for: .touchUpInside)
+        return button
+    }()
+    
     //MARK: - Properties
     
     var delegate: SearchCellDelegate?
@@ -68,10 +80,32 @@ class SearchCell: UITableViewCell {
         fatalError("init(coder:) has not been implemented")
     }
     
+    //MARK: - Selectors
+    
+    @objc func handleGo() {
+        guard let mapItem = self.mapItem else { return }
+        delegate?.getDirections(forMapItem: mapItem)
+    }
+    
     //MARK: - Helpers
+    
+    func animateButtonIn() {
+        goButton.transform = CGAffineTransform(scaleX: 0.25, y: 0.25)
+        UIView.animate(withDuration: 0.9, delay: 0.0, usingSpringWithDamping: 0.5, initialSpringVelocity: 0, options: .curveEaseInOut) {
+            self.goButton.transform = .identity
+            self.goButton.alpha = 1
+        }
+    }
     
     private func configureTableCellUI() {
         let dimensions: CGFloat = 36
+        self.selectionStyle = .none
+        
+        goButton.setDimensions(height: 50, width: 50)
+        contentView.addSubview(goButton)
+        goButton.anchor(trailing: trailingAnchor, paddingTrailing: 8)
+        goButton.centerY(inView: self)
+        
         addSubview(imageContainerView)
         imageContainerView.anchor(leading: leadingAnchor, paddingLeading: 10)
         imageContainerView.setDimensions(height: dimensions, width: dimensions)

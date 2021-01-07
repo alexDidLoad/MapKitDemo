@@ -12,6 +12,7 @@ private let reuseIdentifier = "SearchCell"
 
 protocol SearchInputViewDelegate {
     func handleSearch(withSearchText searchText: String)
+    func addPolyline(forDestinationMapItem destinationMapItem: MKMapItem)
 }
 
 class SearchInputView: UIView {
@@ -183,11 +184,29 @@ extension SearchInputView: UITableViewDelegate, UITableViewDataSource {
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true)
         
+        guard var searchResults = searchResults else { return }
+        let selectedMapItem = searchResults[indexPath.row]
         
+        delegate?.addPolyline(forDestinationMapItem: selectedMapItem)
         
+        // FIXME: Refactor
+        if expansionState == .FullyExpanded {
+            self.searchBar.endEditing(true)
+            self.searchBar.showsCancelButton = false
+            animateInputView(targetPosition: self.frame.origin.y + 460) { (_) in
+                self.expansionState = .PartiallyExpanded
+            }
+        }
+        searchResults.remove(at: indexPath.row)
+        searchResults.insert(selectedMapItem, at: 0)
+        self.searchResults = searchResults
+        
+        let firstIndexPath = IndexPath(row: 0, section: 0)
+        let cell = tableView.cellForRow(at: firstIndexPath) as? SearchCell
+        cell?.animateButtonIn()
     }
+    
 }
 
 //MARK: - UISearchBarDelegate

@@ -34,6 +34,7 @@ class MapController: UIViewController {
     
     private var mapView: MKMapView!
     private var locationManager: CLLocationManager!
+    private var route: MKRoute?
     
     //MARK: - Lifecycle
     
@@ -77,6 +78,7 @@ class MapController: UIViewController {
     
     private func configureMapView() {
         mapView = MKMapView()
+        mapView.delegate = self
         mapView.showsUserLocation = true
         mapView.userTrackingMode = .follow
         
@@ -85,9 +87,26 @@ class MapController: UIViewController {
     }
 }
 
+
 //MARK: - MapKit Helper Functions
 
 extension MapController {
+    
+    func generatePolyline(forDestinationMapItem destinationMapItem: MKMapItem) {
+        
+        let request = MKDirections.Request()
+        request.source = MKMapItem.forCurrentLocation()
+        request.destination = destinationMapItem
+        request.transportType = .automobile
+        
+        let directions = MKDirections(request: request)
+        directions.calculate { (response, error) in
+            guard let response = response else { return }
+            self.route = response.routes[0]
+            guard let polyline = self.route?.polyline else { return }
+            self.mapView.addOverlay(polyline)
+        }
+    }
     
     func searchBy(naturalLanguageQuery: String, region: MKCoordinateRegion, coordinates: CLLocationCoordinate2D, completion: @escaping (_ response: MKLocalSearch.Response?, _ error: NSError?) -> ()) {
         
@@ -146,6 +165,23 @@ extension MapController {
     
 }
 
+//MARK: - MKMapViewDelegate
+
+extension MapController: MKMapViewDelegate {
+    
+    func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+        if let route = self.route {
+            let polyline = route.polyline
+            let lineRenderer = MKPolylineRenderer(overlay: polyline)
+            lineRenderer.strokeColor = .systemBlue
+            lineRenderer.lineWidth = 3
+            return lineRenderer
+        }
+        return MKOverlayRenderer()
+    }
+    
+}
+
 //MARK: - CLLocationManagerDelegate
 
 extension MapController: CLLocationManagerDelegate {
@@ -182,22 +218,28 @@ extension MapController: CLLocationManagerDelegate {
 
 extension MapController: SearchInputViewDelegate {
     
+    func addPolyline(forDestinationMapItem destinationMapItem: MKMapItem) {
+        generatePolyline(forDestinationMapItem: destinationMapItem)
+    }
+    
     func handleSearch(withSearchText searchText: String) {
         removeAnnotations()
         loadAnnotations(withSearchQuery: searchText)
     }
-    
 }
 
 //MARK: - SearchCellDelegate
 
 extension MapController: SearchCellDelegate {
     
+    func getDirections(forMapItem mapItem: MKMapItem) {
+        mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey : MKLaunchOptionsDirectionsModeDriving])
+    }
+    
     func distanceFromUser(location: CLLocation) -> CLLocationDistance? {
         //grabbing user location
         guard let userLocation = locationManager.location else { return nil}
         return userLocation.distance(from: location)
     }
-    
 }
 
