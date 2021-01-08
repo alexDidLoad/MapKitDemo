@@ -97,6 +97,10 @@ class SearchCell: UITableViewCell {
         }
     }
     
+    func removeButton() {
+        self.goButton.alpha = 0
+    }
+    
     private func configureTableCellUI() {
         let dimensions: CGFloat = 36
         self.selectionStyle = .none

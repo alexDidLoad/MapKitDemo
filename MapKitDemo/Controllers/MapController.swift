@@ -92,6 +92,36 @@ class MapController: UIViewController {
 
 extension MapController {
     
+    func zoomToFit(selectedAnnotation: MKAnnotation?) {
+        if mapView.annotations.count == 0 {
+            return
+        }
+        //top left and bottom right coordinate needed to implement zoom functionality
+        var topLeftCoordinate = CLLocationCoordinate2D(latitude: -90, longitude: 180)
+        var bottomRightCoordinate = CLLocationCoordinate2D(latitude: 90, longitude: -180)
+        
+        if let selectedAnnotation = selectedAnnotation {
+            for annotation in mapView.annotations {
+                if let userAnnotation = annotation as? MKUserLocation {
+                    topLeftCoordinate.longitude = fmin(topLeftCoordinate.longitude, userAnnotation.coordinate.longitude)
+                    topLeftCoordinate.latitude = fmax(topLeftCoordinate.latitude, userAnnotation.coordinate.latitude)
+                    bottomRightCoordinate.longitude = fmax(bottomRightCoordinate.longitude, userAnnotation.coordinate.longitude)
+                    bottomRightCoordinate.latitude = fmin(bottomRightCoordinate.latitude, userAnnotation.coordinate.latitude)
+                }
+                if annotation.title == selectedAnnotation.title {
+                    topLeftCoordinate.longitude = fmin(topLeftCoordinate.longitude, annotation.coordinate.longitude)
+                    topLeftCoordinate.latitude = fmax(topLeftCoordinate.latitude, annotation.coordinate.latitude)
+                    bottomRightCoordinate.longitude = fmax(bottomRightCoordinate.longitude, annotation.coordinate.longitude)
+                    bottomRightCoordinate.latitude = fmin(bottomRightCoordinate.latitude, annotation.coordinate.latitude)
+                }
+            }
+            var region = MKCoordinateRegion(center: CLLocationCoordinate2DMake(topLeftCoordinate.latitude - (topLeftCoordinate.latitude - bottomRightCoordinate.latitude) * 0.65, topLeftCoordinate.longitude + (bottomRightCoordinate.longitude - topLeftCoordinate.longitude) * 0.65), span: MKCoordinateSpan(latitudeDelta: fabs(topLeftCoordinate.latitude - bottomRightCoordinate.latitude) * 3.0, longitudeDelta: fabs(bottomRightCoordinate.longitude - topLeftCoordinate.longitude) * 3.0))
+            
+            region = mapView.regionThatFits(region)
+            mapView.setRegion(region, animated: true)
+        }
+    }
+    
     func generatePolyline(forDestinationMapItem destinationMapItem: MKMapItem) {
         
         let request = MKDirections.Request()
@@ -148,7 +178,7 @@ extension MapController {
     func loadAnnotations(withSearchQuery query: String) {
         guard let coordinate = locationManager.location?.coordinate else { return }
         let region = MKCoordinateRegion(center: coordinate, latitudinalMeters: 2000, longitudinalMeters: 2000)
-       
+        
         searchBy(naturalLanguageQuery: query, region: region, coordinates: coordinate) { (response, error) in
             
             guard let response = response else { return }
@@ -218,11 +248,26 @@ extension MapController: CLLocationManagerDelegate {
 
 extension MapController: SearchInputViewDelegate {
     
+    func selectAnnotation(withMapItem mapItem: MKMapItem) {
+        mapView.annotations.forEach { annotation in
+            if annotation.title == mapItem.name {
+                self.mapView.selectAnnotation(annotation, animated: true)
+                self.zoomToFit(selectedAnnotation: annotation)
+            } else if annotation.title != mapItem.name {
+                self.mapView.removeAnnotation(annotation)
+            }
+        }
+    }
+    
     func addPolyline(forDestinationMapItem destinationMapItem: MKMapItem) {
         generatePolyline(forDestinationMapItem: destinationMapItem)
     }
     
     func handleSearch(withSearchText searchText: String) {
+        if mapView.overlays.count > 0 {
+            self.mapView.removeOverlay(mapView.overlays[0])
+        }
+        centerMapOnUserLocation(shouldLoadAnnotations: false)
         removeAnnotations()
         loadAnnotations(withSearchQuery: searchText)
     }

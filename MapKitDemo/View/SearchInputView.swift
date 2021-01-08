@@ -13,6 +13,7 @@ private let reuseIdentifier = "SearchCell"
 protocol SearchInputViewDelegate {
     func handleSearch(withSearchText searchText: String)
     func addPolyline(forDestinationMapItem destinationMapItem: MKMapItem)
+    func selectAnnotation(withMapItem mapItem: MKMapItem)
 }
 
 class SearchInputView: UIView {
@@ -98,6 +99,14 @@ class SearchInputView: UIView {
     }
     
     //MARK: - Helpers
+    
+    private func didSelectMapItem(withMapItems items: [MKMapItem], selectedMapItem: MKMapItem, atIndexPath indexPath: IndexPath) -> [MKMapItem] {
+        var items = items
+        items.remove(at: indexPath.row)
+        items.insert(selectedMapItem, at: 0)
+        items.removeSubrange(1..<items.count)
+        return items
+    }
     
     private func dismissOnSearch() {
         searchBar.showsCancelButton = false
@@ -185,9 +194,10 @@ extension SearchInputView: UITableViewDelegate, UITableViewDataSource {
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         
-        guard var searchResults = searchResults else { return }
+        guard let searchResults = searchResults else { return }
         let selectedMapItem = searchResults[indexPath.row]
         
+        delegate?.selectAnnotation(withMapItem: selectedMapItem)
         delegate?.addPolyline(forDestinationMapItem: selectedMapItem)
         
         // FIXME: Refactor
@@ -198,9 +208,7 @@ extension SearchInputView: UITableViewDelegate, UITableViewDataSource {
                 self.expansionState = .PartiallyExpanded
             }
         }
-        searchResults.remove(at: indexPath.row)
-        searchResults.insert(selectedMapItem, at: 0)
-        self.searchResults = searchResults
+        self.searchResults = didSelectMapItem(withMapItems: searchResults, selectedMapItem: selectedMapItem, atIndexPath: indexPath)
         
         let firstIndexPath = IndexPath(row: 0, section: 0)
         let cell = tableView.cellForRow(at: firstIndexPath) as? SearchCell
@@ -217,6 +225,10 @@ extension SearchInputView: UISearchBarDelegate {
         guard let searchText = searchBar.text else { return }
         delegate?.handleSearch(withSearchText: searchText)
         dismissOnSearch()
+        
+        let firstIndexPath = IndexPath(row: 0, section: 0)
+        let cell = tableView.cellForRow(at: firstIndexPath) as? SearchCell
+        cell?.removeButton()
     }
     
     func searchBarTextDidBeginEditing(_ searchBar: UISearchBar) {
